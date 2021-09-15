@@ -60,8 +60,8 @@ function add_fields(fields){
                 let picker = get_color_picker(group.name, field.name)
 
                 fields_container.appendChild(picker)
-            }else if(field.type === "image"){
-                fields_container.appendChild( get_image_loader(group.name) )
+            }else if(field.name === "image"){
+                fields_container.appendChild( get_image_loader(group.name, field.type) )
             }else{
                 let editor = document.createElement("input")
                 editor.type = editor_type[field.type]
@@ -120,7 +120,7 @@ function get_color_picker(element_id, attr){
     return color_picker_box
 }
 
-function get_image_loader(element_id){
+function get_image_loader(element_id, resize_type){
     let input_file = document.createElement("input")
     input_file.type = "file"
     input_file.style.display = "none"
@@ -138,9 +138,17 @@ function get_image_loader(element_id){
             img.onload = () => {
                 const image_width = image.getAttribute("width")
                 const image_height = image.getAttribute("height")
-                const image_ratio = image_height / image_width
+                // const image_ratio = image_height / image_width
                 const new_ratio = img.height / img.width
-                image.setAttribute("height", new_ratio * image_width)
+                if(resize_type === "keep-width"){
+                    // resize height accordingly
+                    image.setAttribute("height", new_ratio * image_width)
+                }else if(resize_type === "keep-height"){
+                    // resize width accordigly
+                    image.setAttribute("width",  image_height / new_ratio)
+                }else if(resize_type === "keep-size"){
+                    // nothing to do
+                }
             }
             img.src = dataurl
         }

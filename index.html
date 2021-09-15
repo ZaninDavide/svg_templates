@@ -13,12 +13,14 @@
             <h2>Template:</h2>
             <input id="input_template" type="file" accept=".svg" onchange="read_template(event)" />
             <button id="input_template_button" onclick="load_template()">OPEN</button>
+            <button id="save_button" onclick="download_svg()">SAVE</button>
             <div id="fields">
 
             </div>
         </div>
         <div id="viewport"></div>
     </div>
+    <script src="svg_downloader.js"></script>
     <script src="script.js"></script>
     <style src="style.css"/>
 </body>
