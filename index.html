@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVG Templates</title>
+    <link rel="stylesheet" type="text/css" href="style.css" media="screen" />
+</head>
+<body>
+    <div id="main">
+        <div id="panel">
+            <h2>Template:</h2>
+            <input id="input_template" type="file" accept=".svg" onchange="read_template(event)" />
+            <button id="input_template_button" onclick="load_template()">OPEN</button>
+            <div id="fields">
+
+            </div>
+        </div>
+        <div id="viewport"></div>
+    </div>
+    <script src="script.js"></script>
+    <style src="style.css"/>
+</body>
+</html>
