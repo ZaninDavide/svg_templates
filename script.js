@@ -53,22 +53,31 @@ function add_fields(fields){
         group_label.innerText = group.name
         fields_container.appendChild(group_label)
         group.fields.forEach(field => {
-            // let field_label = document.createElement("p")
-            // field_label.innerText = field.name + ": "
-            // fields_container.appendChild(field_label)
-            if(field.type === "color"){
-                let picker = get_color_picker(group.name, field.name)
 
+            if(field.type === "color"){
+                // COLOR PICKER
+                let picker = get_color_picker(group.name, field.name, field.type)
                 fields_container.appendChild(picker)
+
             }else if(field.name === "image"){
+                // IMAGE LOADER
                 fields_container.appendChild( get_image_loader(group.name, field.type) )
+
+            } else if(field.type === "text-multiline"){
+                // MULTILINE TEXT INPUT
+                let editor = document.createElement("textarea")
+                editor.value = get_attr(group.name, field.name, field.type)
+                editor.placeholder = editor.value
+                editor.oninput = (e) => edit_attr(group.name, field.name, field.type, e.target.value)
+                fields_container.appendChild(editor)
+
             }else{
+                // SINGLE LINE TEXT
                 let editor = document.createElement("input")
                 editor.type = editor_type[field.type]
-                editor.value = get_attr(group.name, field.name)
+                editor.value = get_attr(group.name, field.name, field.type)
                 if(editor.type === "text") editor.placeholder = editor.value
-                editor.onchange = (e) => edit_attr(group.name, field.name, e.target.value)
-
+                editor.oninput = (e) => edit_attr(group.name, field.name, field.type, e.target.value)
                 fields_container.appendChild(editor)
             }
 
@@ -76,29 +85,47 @@ function add_fields(fields){
     }) 
 }
 
-function get_attr(element_id, attr){
+function get_attr(element_id, attr, attr_type){
     const element = document.getElementById(element_id)
 
     if(attr === "content"){
-        return element.innerHTML
+        if(attr_type === "text-multiline"){
+            let str = element.innerHTML.replace(/<tspan[^>]*>([^<]*)<\/tspan>/g, `$1\n`)
+            str = str.slice(0, str.length - 1)
+            return str
+        }else{
+            return element.innerHTML
+        }
     }else{
         return element.style[attr]
     }
 }
 
-function edit_attr(element_id, attr, value){
+function edit_attr(element_id, attr, attr_type, value){
     const element = document.getElementById(element_id)
-    // const value = get_attr(group.name, field.name)
+    // const value = get_attr(group.name, field.name, attr_type)
 
     if(attr === "content"){
-        element.innerHTML = value.toString()
+        if(attr_type === "text-multiline"){
+            const x = element.getAttribute("x")
+            const y = element.getAttribute("y")
+            const unit = element.style.fontSize.slice(element.style.fontSize.length - 2, element.style.fontSize.length)
+            const fontSize = parseFloat(element.style.fontSize.slice(0, element.style.fontSize.length - 2))
+            const spacing = fontSize * element.style.lineHeight
+
+            element.innerHTML = value.split(/\n\r|\n|\r|\r\n/).map((line, i) => {
+                return `<tspan x="${x}" y="${y}" dx="0" dy="${spacing*i}${unit}">${line}</tspan>`
+            }).join("")
+        }else{
+            element.innerHTML = value.toString()
+        }
     }else{
         element.style[attr] = value
     }
 }
 
-function get_color_picker(element_id, attr){    
-    const value = get_attr(element_id, attr)
+function get_color_picker(element_id, attr, attr_type){    
+    const value = get_attr(element_id, attr, attr_type)
 
     let color_picker_box = document.createElement("div")
     color_picker_box.className = "color_picker_box"
@@ -109,9 +136,9 @@ function get_color_picker(element_id, attr){
     color_picker.value = value
     color_picker.style.opacity = 0
     color_picker.onchange = (e) => {
-        const color = get_attr(element_id, attr)
+        const color = get_attr(element_id, attr, attr_type)
         color_picker_box.style.backgroundColor = e.target.value
-        edit_attr(element_id, attr, e.target.value)
+        edit_attr(element_id, attr, attr_type, e.target.value)
 
     }
 

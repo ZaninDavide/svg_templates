@@ -1,16 +1,24 @@
+@font-face {
+	font-family: system-ui;
+	font-style: normal;
+	font-weight: 300;
+	src: local(".SFNS-Light"), local(".SFNSText-Light"), local(".HelveticaNeueDeskInterface-Light"), local(".LucidaGrandeUI"), local("Segoe UI Light"), local("Ubuntu Light"), local("Roboto-Light"), local("DroidSans"), local("Tahoma");
+}
+
 body{
     margin: 0;
     padding: 0;
     overflow: hidden;
     background-color: white;
     color: rgb(22, 22, 22);
+    font-family: system-ui;
 }
 
 #main{
     width: 100vw;
     height: 100vh;
     display: grid;
-    grid-template-columns: minmax(250px, 20%) 1fr;
+    grid-template-columns: minmax(250px, auto) 1fr;
 }
 
 #panel{
@@ -54,7 +62,7 @@ input[type=color]{
     cursor: pointer;
 }
 
-input[type=text], select {
+input[type=text], select, textarea {
     width: calc(100% - 30px);
     padding: 12px 20px;
     margin: 8px 0;
@@ -62,6 +70,12 @@ input[type=text], select {
     border: 1px solid #ccc;
     border-radius: 4px;
     box-sizing: border-box;
+}
+
+textarea {
+    margin-right: 20px;
+    font-family: system-ui;
+    font-size: 13.33333px;
 }
 
 button, input[type=button], input[type=submit], input[type=reset] {
