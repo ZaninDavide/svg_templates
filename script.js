@@ -1,6 +1,50 @@
 const viewport = document.getElementById("viewport")
 const fields_container = document.getElementById("fields")
+const templates_container = document.getElementById("templates")
 const input_template = document.getElementById("input_template")
+const input_template_button = document.getElementById("input_template_button")
+const save_buttons_container = document.getElementById("save_buttons_container")
+const overlay = document.getElementById("overlay")
+
+function list_stored_templates() {
+    templates_container.innerHTML = "";
+    let list = Object.keys(localStorage);
+    list.forEach(template_name => {
+        let template_button_container = document.createElement("div");
+
+        let remove_template_button = document.createElement("div");
+        remove_template_button.innerHTML = "&#x2715";
+        remove_template_button.style.fontSize = "12px";
+        remove_template_button.style.padding = "5px";
+        remove_template_button.style.textAlign = "center";
+        remove_template_button.style.float = "right";
+        remove_template_button.style.cursor = "pointer";
+        remove_template_button.style.width = "10px";
+
+        remove_template_button.onclick = () => {
+            localStorage.removeItem(template_name);
+            list_stored_templates();
+        };
+        template_button_container.appendChild(remove_template_button);
+
+        let template_button = document.createElement("button");
+        template_button.innerText = template_name;
+        template_button.classList.add("template_button");
+        template_button.onclick = () => {
+            const template_svg = localStorage.getItem(template_name);
+            viewport.innerHTML = template_svg;
+            find_fields(template_svg);
+            save_buttons_container.style.display = "";
+            templates_container.style.display = "none";
+            input_template_button.style.display = "none";
+        }
+        template_button_container.appendChild(template_button);
+
+
+        templates_container.appendChild(template_button_container);
+    })
+}
+
 
 function load_template(){
     input_template.click()
@@ -13,6 +57,15 @@ function read_template(event){
         // read template
         viewport.innerHTML = reader.result
         find_fields(reader.result)
+        save_buttons_container.style.display = "";
+        templates_container.style.display = "none";
+        input_template_button.style.display = "none";
+        try {
+            localStorage.setItem(input.files[0].name, reader.result);
+        } catch (error) {
+            alert("The loaded file will not be saved in your local templates because the cache size has reached its limit. Try to avoid inserting big images inside your templates. '" + error + "'")
+        }
+        // list_stored_templates();
     };
     reader.readAsText(input.files[0]);
 }
@@ -68,6 +121,8 @@ function add_fields(fields){
                 let editor = document.createElement("textarea")
                 editor.value = get_attr(group.name, field.name, field.type)
                 editor.placeholder = editor.value
+                editor.style.height = "200px"
+                editor.style.width = "400px"
                 editor.oninput = (e) => edit_attr(group.name, field.name, field.type, e.target.value)
                 fields_container.appendChild(editor)
 
@@ -83,6 +138,11 @@ function add_fields(fields){
 
         })
     }) 
+
+    // extra space for scrolling
+    let space = document.createElement("div")
+    space.style.height = "100px";
+    fields_container.appendChild(space)
 }
 
 function get_attr(element_id, attr, attr_type){
@@ -163,19 +223,34 @@ function get_image_loader(element_id, resize_type){
 
             const img = new Image()
             img.onload = () => {
+                const resize_settings = resize_type.split(/\s+/)
                 const image_width = image.getAttribute("width")
                 const image_height = image.getAttribute("height")
+                const image_centerX = parseFloat(image.getAttribute("x")) + (image_width/2)
+                const image_centerY = parseFloat(image.getAttribute("y")) + (image_height/2)
+
                 // const image_ratio = image_height / image_width
                 const new_ratio = img.height / img.width
-                if(resize_type === "keep-width"){
+                let new_width = image_width
+                let new_height = image_height
+                if(resize_settings.indexOf("keep-width") !== -1){
                     // resize height accordingly
-                    image.setAttribute("height", new_ratio * image_width)
-                }else if(resize_type === "keep-height"){
+                    new_height = new_ratio * image_width
+                }else if(resize_settings.indexOf("keep-height") !== -1){
                     // resize width accordigly
-                    image.setAttribute("width",  image_height / new_ratio)
-                }else if(resize_type === "keep-size"){
+                    new_width = image_height / new_ratio
+                }else if(resize_settings.indexOf("keep-size") !== -1){
                     // nothing to do
                 }
+
+                if(resize_settings.indexOf("align-center") !== -1){
+                    image.setAttribute("x", image_centerX - new_width/2 )
+                    image.setAttribute("y", image_centerY - new_height/2 )
+                }
+
+                image.setAttribute("height", new_height)
+                image.setAttribute("width", new_width)
+
             }
             img.src = dataurl
         }
@@ -204,3 +279,6 @@ const editor_type = {
     "text": "text",
     "string": "string",
 }
+
+list_stored_templates()
+save_buttons_container.style.display = "none";

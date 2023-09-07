@@ -9,17 +9,20 @@
 </head>
 <body>
     <div id="main">
-        <div id="panel">
-            <h2>Template:</h2>
+        <div id="panel">          
             <input id="input_template" type="file" accept=".svg" onchange="read_template(event)" />
-            <button id="input_template_button" onclick="load_template()">OPEN</button>
-            <button id="save_button" onclick="download_svg()">SAVE</button>
-            <div id="fields">
-
+            <button id="input_template_button" onclick="load_template()">OPEN FROM FILE</button>
+            <div id="templates"></div>
+            <div id="save_buttons_container">
+                <button id="save_button1k" onclick="download_svg(1*1024)">SAVE 1k</button>
+                <button id="save_button2k" onclick="download_svg(2*1024)">SAVE 2k</button>
+                <button id="save_button4k" onclick="download_svg(4*1024)">SAVE 4k</button>    
             </div>
+            <div id="fields"></div>  
         </div>
         <div id="viewport"></div>
     </div>
+    <div id="overlay" style="display: none"></div>
     <script src="svg_downloader.js"></script>
     <script src="script.js"></script>
     <style src="style.css"/>
