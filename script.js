@@ -70,9 +70,10 @@ function read_template(event){
     reader.readAsText(input.files[0]);
 }
 
+// find objects with fields and create widgets for them
 function find_fields(svg){
     const tree = (new DOMParser()).parseFromString(svg, "application/xml");
-    let fields = []
+    let field_groups = []
     let recursive = (obj) => {
         // if this has editable fields add them to the list
         if(obj.attributes && obj.attributes.fields){
@@ -83,12 +84,12 @@ function find_fields(svg){
                 const splitted = f.split(/\s*:\s*/)
                 if(splitted.length >= 2) {
                     cur_fields.push({
-                        name: splitted[0],
-                        type: splitted[1]
+                        name: splitted[0].trim(),
+                        type: splitted[1].trim()
                     })
                 }
             })
-            fields.push({name: obj_id, fields: cur_fields})
+            field_groups.push({name: obj_id, fields: cur_fields})
         }
         // do the same with his children
         if(obj.children){
@@ -96,44 +97,82 @@ function find_fields(svg){
         }
     }
     recursive(tree)
-    add_fields(fields)
+    add_fields(field_groups)
 }
 
-function add_fields(fields){
+// create fields' editors widgets
+function add_fields(field_groups){
     fields_container.innerHTML = ""
-    fields.forEach(group => {
+    field_groups.forEach(group => {
         let group_label = document.createElement("h3");
         group_label.innerText = group.name
         fields_container.appendChild(group_label)
         group.fields.forEach(field => {
-
-            if(field.type === "color"){
-                // COLOR PICKER
-                let picker = get_color_picker(group.name, field.name, field.type)
-                fields_container.appendChild(picker)
-
-            }else if(field.name === "image"){
-                // IMAGE LOADER
+            // The special field names are: image, content; the meaning of field.type here is special.
+            // Every other field is interpreted as (field.name, field.type) = (field_name, data_type).
+            if(field.name === "image") {
+                // SPECIAL FIELD: IMAGE
+                // field type: keep-width / keep-height / keep-size
                 fields_container.appendChild( get_image_loader(group.name, field.type) )
-
-            } else if(field.type === "text-multiline"){
-                // MULTILINE TEXT INPUT
-                let editor = document.createElement("textarea")
-                editor.value = get_attr(group.name, field.name, field.type)
-                editor.placeholder = editor.value
-                editor.style.height = "200px"
-                editor.style.width = "400px"
-                editor.oninput = (e) => edit_attr(group.name, field.name, field.type, e.target.value)
-                fields_container.appendChild(editor)
-
-            }else{
-                // SINGLE LINE TEXT
-                let editor = document.createElement("input")
-                editor.type = editor_type[field.type]
-                editor.value = get_attr(group.name, field.name, field.type)
-                if(editor.type === "text") editor.placeholder = editor.value
-                editor.oninput = (e) => edit_attr(group.name, field.name, field.type, e.target.value)
-                fields_container.appendChild(editor)
+            } else if(field.name === "content") {
+                // SPECIAL FIELD: CONTENT
+                let types = field.type.split(" ");
+                if(types.indexOf("text-multiline") !== -1){
+                    // MULTILINE TEXT EDITOR
+                    let editor = document.createElement("textarea")
+                    editor.value = get_attr(group.name, field.name, field.type)
+                    editor.placeholder = editor.value
+                    editor.title = field.name;
+                    editor.style.height = "200px"
+                    // editor.style.width = "400px"
+                    editor.oninput = (e) => edit_multiline_text(group.name, e.target.value)
+                    fields_container.appendChild(editor)
+                }else if(types.indexOf("text") !== -1){
+                    // TEXT EDITOR
+                    let editor = document.createElement("input")
+                    editor.type = "text"
+                    editor.value = get_attr(group.name, field.name, field.type)
+                    editor.title = field.name;
+                    if(editor.type === "text") editor.placeholder = editor.value
+                    editor.oninput = (e) => edit_text(group.name, e.target.value)
+                    fields_container.appendChild(editor)
+                }
+            } else {
+                // ORDINARY FIELD: (field.name, field.type) = (object property name, property data type)
+                if (field.type === "color") {
+                    // COLOR PICKER
+                    let picker = get_color_picker(group.name, field.name, field.type)
+                    picker.title = field.name;
+                    fields_container.appendChild(picker)
+                } else if(field.type.startsWith("[") && field.type.endsWith("]")) {
+                    console.log("CIAO", field.type);
+                    // TOGGLE BETWEEN OPTIONS
+                    let options = field.type.slice(1,-1).split(",").map(op => op.trim()).filter(op => op !== "");
+                    let editor = document.createElement("select");
+                    options.forEach(op => {
+                        let option = document.createElement("option");
+                        option.value = op;
+                        option.innerText = op;
+                        editor.appendChild(option);
+                    })
+                    editor.title = field.name;
+                    editor.onchange = (e) => edit_attr(group.name, field.name, e.target.value)
+                    fields_container.appendChild(editor)
+                } else {
+                    // GENERIC EDITOR
+                    let editor = document.createElement("input")
+                    editor.type = {
+                        "text": "text",
+                        "size": "text",
+                        "number": "number",
+                    }[field.type];
+                    editor.value = get_attr(group.name, field.name, field.type)
+                    editor.placeholder = field.name + ": " + editor.value
+                    editor.title = field.name;
+                    if (editor.type === "number") editor.step = 0.1;
+                    editor.oninput = (e) => edit_attr(group.name, field.name, e.target.value)
+                    fields_container.appendChild(editor)
+                }
             }
 
         })
@@ -161,27 +200,28 @@ function get_attr(element_id, attr, attr_type){
     }
 }
 
-function edit_attr(element_id, attr, attr_type, value){
+function edit_text(element_id, value) {
     const element = document.getElementById(element_id)
-    // const value = get_attr(group.name, field.name, attr_type)
+    element.innerHTML = value.toString()
+}
 
-    if(attr === "content"){
-        if(attr_type === "text-multiline"){
-            const x = element.getAttribute("x")
-            const y = element.getAttribute("y")
-            const unit = element.style.fontSize.slice(element.style.fontSize.length - 2, element.style.fontSize.length)
-            const fontSize = parseFloat(element.style.fontSize.slice(0, element.style.fontSize.length - 2))
-            const spacing = fontSize * element.style.lineHeight
+function edit_multiline_text(element_id, value) {
+    const element = document.getElementById(element_id)
+    const x = element.getAttribute("x")
+    const y = element.getAttribute("y")
+    const unit = element.style.fontSize.slice(element.style.fontSize.length - 2, element.style.fontSize.length)
+    const fontSize = parseFloat(element.style.fontSize.slice(0, element.style.fontSize.length - 2))
+    const spacing = fontSize * element.style.lineHeight
 
-            element.innerHTML = value.split(/\n\r|\n|\r|\r\n/).map((line, i) => {
-                return `<tspan x="${x}" y="${y}" dx="0" dy="${spacing*i}${unit}">${line}</tspan>`
-            }).join("")
-        }else{
-            element.innerHTML = value.toString()
-        }
-    }else{
-        element.style[attr] = value
-    }
+    element.innerHTML = value.split(/\n\r|\n|\r|\r\n/).map((line, i) => {
+        return `<tspan x="${x}" y="${y}" dx="0" dy="${spacing*i}${unit}">${line}</tspan>`
+    }).join("")
+}
+
+// edit_attr: set attribute of a given DOM element
+function edit_attr(element_id, attr, value){
+    const element = document.getElementById(element_id)
+    element.style[attr] = value
 }
 
 function get_color_picker(element_id, attr, attr_type){    
@@ -196,10 +236,8 @@ function get_color_picker(element_id, attr, attr_type){
     color_picker.value = value
     color_picker.style.opacity = 0
     color_picker.onchange = (e) => {
-        const color = get_attr(element_id, attr, attr_type)
         color_picker_box.style.backgroundColor = e.target.value
-        edit_attr(element_id, attr, attr_type, e.target.value)
-
+        edit_attr(element_id, attr, e.target.value)
     }
 
     color_picker_box.appendChild(color_picker)
@@ -237,7 +275,7 @@ function get_image_loader(element_id, resize_type){
                     // resize height accordingly
                     new_height = new_ratio * image_width
                 }else if(resize_settings.indexOf("keep-height") !== -1){
-                    // resize width accordigly
+                    // resize width accordingly
                     new_width = image_height / new_ratio
                 }else if(resize_settings.indexOf("keep-size") !== -1){
                     // nothing to do
@@ -268,16 +306,6 @@ function get_image_loader(element_id, resize_type){
     input_file_box.appendChild(input_file_button)
 
     return input_file_button
-}
-
-const editor_type = {
-    "size": "text",
-    "number": "number",
-    "color": "color",
-    "rgb": "color",
-    "rgba": "color",
-    "text": "text",
-    "string": "string",
 }
 
 list_stored_templates()
