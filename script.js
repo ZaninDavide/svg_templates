@@ -6,6 +6,8 @@ const input_template_button = document.getElementById("input_template_button")
 const save_buttons_container = document.getElementById("save_buttons_container")
 const overlay = document.getElementById("overlay")
 
+let field_groups = [];
+
 function list_stored_templates() {
     templates_container.innerHTML = "";
     let list = Object.keys(localStorage);
@@ -73,7 +75,7 @@ function read_template(event){
 // find objects with fields and create widgets for them
 function find_fields(svg){
     const tree = (new DOMParser()).parseFromString(svg, "application/xml");
-    let field_groups = []
+    let new_field_groups = []
     let recursive = (obj) => {
         // if this has editable fields add them to the list
         if(obj.attributes && obj.attributes.fields){
@@ -81,7 +83,7 @@ function find_fields(svg){
             const obj_id = obj.attributes.id.value
             let cur_fields = []
             str_fields.split(/\s*;\s*/).forEach(f => {
-                const splitted = f.split(/\s*:\s*/)
+                const splitted = split_first_level(f, ":")
                 if(splitted.length >= 2) {
                     cur_fields.push({
                         name: splitted[0].trim(),
@@ -89,7 +91,9 @@ function find_fields(svg){
                     })
                 }
             })
-            field_groups.push({name: obj_id, fields: cur_fields})
+            // on_refresh will contain functions that need to be executed to refresh the object
+            // the key will refer to the field that requested that procedure
+            new_field_groups.push({name: obj_id, fields: cur_fields, on_refresh: {}})
         }
         // do the same with his children
         if(obj.children){
@@ -97,13 +101,13 @@ function find_fields(svg){
         }
     }
     recursive(tree)
-    add_fields(field_groups)
+    add_fields(new_field_groups)
 }
 
 // create fields' editors widgets
-function add_fields(field_groups){
+function add_fields(new_field_groups){
     fields_container.innerHTML = ""
-    field_groups.forEach(group => {
+    new_field_groups.forEach((group, group_id) => {
         let group_label = document.createElement("h3");
         group_label.innerText = group.name
         fields_container.appendChild(group_label)
@@ -130,9 +134,23 @@ function add_fields(field_groups){
                         const bounding_box = element.getBBox(); 
                         const centerY = bounding_box.y + 0.5*bounding_box.height;
                         element.setAttribute("originalCenterY", centerY)
-                        editor.oninput = (e) => edit_multiline_text_align_center(group.name, e.target.value)
+                        editor.oninput = (e) => {
+                            edit_multiline_text_align_center(group.name, e.target.value)
+                            refresh_but(group.name, field.name)
+                        }
+                        // add a refresh schedule for the content field this is needed because 
+                        // the line spacing depends on fontFamily, fontSize, lineHeight,... 
+                        new_field_groups[group_id].on_refresh[field.name] = () => 
+                            edit_multiline_text_align_center(group.name, editor.value);
                     } else {
-                        editor.oninput = (e) => edit_multiline_text(group.name, e.target.value)
+                        editor.oninput = (e) => {
+                            edit_multiline_text(group.name, e.target.value)
+                            refresh_but(group.name, field.name)
+                        }
+                        // add a refresh schedule for the content field this is needed because 
+                        // the line spacing depends on fontFamily, fontSize, lineHeight,... 
+                        new_field_groups[group_id].on_refresh[field.name] = () => 
+                            edit_multiline_text(group.name, editor.value);
                     }
                     // running this once at the begging is needed because other editors may 
                     // work only after the multiline text has been built once
@@ -145,18 +163,35 @@ function add_fields(field_groups){
                     editor.value = get_attr(group.name, field.name, field.type)
                     editor.title = field.name;
                     if(editor.type === "text") editor.placeholder = editor.value
-                    editor.oninput = (e) => edit_text(group.name, e.target.value)
+                    editor.oninput = (e) => {
+                        edit_text(group.name, e.target.value)
+                        refresh_but(group.name, field.name)
+                    }
                     fields_container.appendChild(editor)
                 }
             } else {
                 // ORDINARY FIELD: (field.name, field.type) = (object property name, property data type)
                 if (field.type === "color") {
                     // COLOR PICKER
-                    let picker = get_color_picker(group.name, field.name, field.type)
-                    picker.title = field.name;
-                    fields_container.appendChild(picker)
+                    const value = get_attr(group.name, field.name, field.type)
+                    let color_picker_box = document.createElement("div")
+                    color_picker_box.className = "color_picker_box"
+                    color_picker_box.style.backgroundColor = value
+                    let color_picker = document.createElement("input")
+                    color_picker.type = "color"
+                    color_picker.value = value
+                    color_picker.style.opacity = 0
+                    color_picker.onchange = (e) => {
+                        color_picker_box.style.backgroundColor = e.target.value
+                        edit_attr(group.name, field.name, e.target.value)
+                        refresh_but(group.name, field.name)
+                    }
+                    color_picker_box.appendChild(color_picker)
+                    color_picker_box.title = field.name;
+                    fields_container.appendChild(color_picker_box)
                 } else if(field.type.startsWith("[") && field.type.endsWith("]")) {
                     // TOGGLE BETWEEN OPTIONS
+                    // fontSize: [28px, 20px, 35px, 40px, 50px, 60px]; 
                     let options = field.type.slice(1,-1).split(",").map(op => op.trim()).filter(op => op !== "");
                     let editor = document.createElement("select");
                     options.forEach(op => {
@@ -166,7 +201,36 @@ function add_fields(field_groups){
                         editor.appendChild(option);
                     })
                     editor.title = field.name;
-                    editor.onchange = (e) => edit_attr(group.name, field.name, e.target.value)
+                    editor.onchange = (e) => {
+                        edit_attr(group.name, field.name, e.target.value)
+                        refresh_but(group.name, field.name)
+                    }
+                    fields_container.appendChild(editor)
+                } else if(field.type.startsWith("{") && field.type.endsWith("}")) {
+                    // TOGGLE BETWEEN NAMED OPTIONS
+                    // fill: {nero: black, rosso: red, verde: green, blu: blue}; 
+                    let options = field.type
+                        .slice(1,-1)
+                        .split(",")
+                        .map(op => op.trim())
+                        .filter(op => op !== "")
+                        .map(op => {
+                            const x = op.split(":");
+                            return { label: x[0].trim(), value: x[1].trim() }
+                        })
+                    ;
+                    let editor = document.createElement("select");
+                    options.forEach(op => {
+                        let option = document.createElement("option");
+                        option.value = op.value;
+                        option.innerText = op.label;
+                        editor.appendChild(option);
+                    })
+                    editor.title = field.name;
+                    editor.onchange = (e) => {
+                        edit_attr(group.name, field.name, e.target.value)
+                        refresh_but(group.name, field.name)
+                    }
                     fields_container.appendChild(editor)
                 } else {
                     // GENERIC EDITOR
@@ -176,11 +240,18 @@ function add_fields(field_groups){
                         "size": "text",
                         "number": "number",
                     }[field.type];
+                    if (editor.type === undefined) {
+                        console.error(`Unknown editor type '${field.type}'. The default text editor will be used.`);
+                        editor.type = "text";
+                    }
                     editor.value = get_attr(group.name, field.name, field.type)
                     editor.placeholder = field.name + ": " + editor.value
                     editor.title = field.name;
                     if (editor.type === "number") editor.step = 0.1;
-                    editor.oninput = (e) => edit_attr(group.name, field.name, e.target.value)
+                    editor.oninput = (e) => {
+                        edit_attr(group.name, field.name, e.target.value)
+                        refresh_but(group.name, field.name)
+                    }
                     fields_container.appendChild(editor)
                 }
             }
@@ -192,6 +263,11 @@ function add_fields(field_groups){
     let space = document.createElement("div")
     space.style.height = "100px";
     fields_container.appendChild(space)
+
+    // save this field groups in a global variable for later use
+    // now each group contains a list of functions to run when
+    // refreshing / updating the element
+    field_groups = new_field_groups;
 }
 
 function get_attr(element_id, attr, attr_type){
@@ -262,27 +338,6 @@ function edit_attr(element_id, attr, value){
     element.style[attr] = value
 }
 
-function get_color_picker(element_id, attr, attr_type){    
-    const value = get_attr(element_id, attr, attr_type)
-
-    let color_picker_box = document.createElement("div")
-    color_picker_box.className = "color_picker_box"
-    color_picker_box.style.backgroundColor = value
-
-    let color_picker = document.createElement("input")
-    color_picker.type = "color"
-    color_picker.value = value
-    color_picker.style.opacity = 0
-    color_picker.onchange = (e) => {
-        color_picker_box.style.backgroundColor = e.target.value
-        edit_attr(element_id, attr, e.target.value)
-    }
-
-    color_picker_box.appendChild(color_picker)
-
-    return color_picker_box
-}
-
 function get_image_loader(element_id, resize_type){
     let input_file = document.createElement("input")
     input_file.type = "file"
@@ -337,7 +392,7 @@ function get_image_loader(element_id, resize_type){
     let input_file_button = document.createElement("button")
     input_file_button.innerText = "IMAGE"
     input_file_button.onclick = () => input_file.click()
-    input_file_button.accept = ".jpg,.jpeg,.png"
+    input_file_button.accept = ".jpg,.jpeg,.png,.svg"
 
     let input_file_box = document.createElement("div")
     input_file_box.appendChild(input_file)
@@ -348,3 +403,40 @@ function get_image_loader(element_id, resize_type){
 
 list_stored_templates()
 save_buttons_container.style.display = "none";
+
+function split_first_level(string, char) {
+    if(char.length !== 1) {
+        console.error("split_first_level: char must be of length one");
+        return [ string ];
+    }
+    let parts = [];
+    let rn_level = 0; // round parenthesis
+    let sq_level = 0; // square brackets
+    let br_level = 0; // curly braces
+    let from = 0;
+    string += char;
+    for(i = 0; i < string.length; i++) {
+        if ( string[i] === char ) {
+            if (rn_level === 0 && sq_level === 0 && br_level === 0) {
+                parts.push(string.slice(from, i))
+                from = i + 1;
+            }
+        }
+        else if ( string[i] === "(" ){ rn_level += 1; }
+        else if ( string[i] === ")"){ rn_level = Math.max(rn_level - 1, 0); }
+        else if ( string[i] === "["){ sq_level += 1; }
+        else if ( string[i] === "]"){ sq_level = Math.max(sq_level - 1, 0); }
+        else if ( string[i] === "{"){ br_level += 1; }
+        else if ( string[i] === "}"){ br_level = Math.max(br_level - 1, 0); }
+    }
+    return parts;
+}
+
+function refresh_but(group_name, but_field) {
+    const f = field_groups.filter(g => g.name === group_name);
+    if (f.length === 1) {
+        const group = f[0]
+        const fields_to_update = Object.keys(group.on_refresh).filter(k => k !== but_field);
+        fields_to_update.forEach(f => { group.on_refresh[f](); })
+    }
+}
