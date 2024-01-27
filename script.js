@@ -124,8 +124,19 @@ function add_fields(field_groups){
                     editor.placeholder = editor.value
                     editor.title = field.name;
                     editor.style.height = "200px"
-                    // editor.style.width = "400px"
-                    editor.oninput = (e) => edit_multiline_text(group.name, e.target.value)
+                    if ( types.indexOf("align-center") !== -1 ) {
+                        const element = document.getElementById(group.name)
+                        // we save the original center position to avoid errors accumulating
+                        const bounding_box = element.getBBox(); 
+                        const centerY = bounding_box.y + 0.5*bounding_box.height;
+                        element.setAttribute("originalCenterY", centerY)
+                        editor.oninput = (e) => edit_multiline_text_align_center(group.name, e.target.value)
+                    } else {
+                        editor.oninput = (e) => edit_multiline_text(group.name, e.target.value)
+                    }
+                    // running this once at the begging is needed because other editors may 
+                    // work only after the multiline text has been built once
+                    editor.oninput({target: {value: editor.value}});
                     fields_container.appendChild(editor)
                 }else if(types.indexOf("text") !== -1){
                     // TEXT EDITOR
@@ -145,7 +156,6 @@ function add_fields(field_groups){
                     picker.title = field.name;
                     fields_container.appendChild(picker)
                 } else if(field.type.startsWith("[") && field.type.endsWith("]")) {
-                    console.log("CIAO", field.type);
                     // TOGGLE BETWEEN OPTIONS
                     let options = field.type.slice(1,-1).split(",").map(op => op.trim()).filter(op => op !== "");
                     let editor = document.createElement("select");
@@ -188,7 +198,8 @@ function get_attr(element_id, attr, attr_type){
     const element = document.getElementById(element_id)
 
     if(attr === "content"){
-        if(attr_type === "text-multiline"){
+        let attr_types = attr_type.split(" ");
+        if(attr_types.indexOf("text-multiline") !== -1){
             let str = element.innerHTML.replace(/<tspan[^>]*>([^<]*)<\/tspan>/g, `$1\n`)
             str = str.slice(0, str.length - 1)
             return str
@@ -215,6 +226,33 @@ function edit_multiline_text(element_id, value) {
 
     element.innerHTML = value.split(/\n\r|\n|\r|\r\n/).map((line, i) => {
         return `<tspan x="${x}" y="${y}" dx="0" dy="${spacing*i}${unit}">${line}</tspan>`
+    }).join("")
+}
+
+function edit_multiline_text_align_center(element_id, value) {
+    const element = document.getElementById(element_id)
+    const unit = element.style.fontSize.slice(element.style.fontSize.length - 2, element.style.fontSize.length)
+    const fontSize = parseFloat(element.style.fontSize.slice(0, element.style.fontSize.length - 2))
+    const spacing = fontSize * parseFloat(element.style.lineHeight)
+    const x = parseFloat(element.getAttribute("x"))
+    const y = parseFloat(element.getAttribute("y"))
+    const originalCenterY = parseFloat(element.getAttribute("originalCenterY"))
+
+    const lines = value.split(/\n\r|\n|\r|\r\n/);
+
+    // we write the text without considering center alignment
+    element.innerHTML = lines.map((line, i) => {
+        let dy = spacing*i;
+        return `<tspan x="${x}" y="${y}" dx="0" dy="${dy}${unit}">${line}</tspan>`
+    }).join("")
+
+    // we calculate the new size and center of the text and compensate for the change
+    const bounding_box = element.getBBox();
+    const newCenterY = bounding_box.y + 0.5*bounding_box.height;
+    const vertical_shift = newCenterY - originalCenterY;
+    element.innerHTML = lines.map((line, i) => {
+        let dy = spacing*i - vertical_shift;
+        return `<tspan x="${x}" y="${y}" dx="0" dy="${dy}${unit}">${line}</tspan>`
     }).join("")
 }
 
