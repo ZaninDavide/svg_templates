@@ -3,45 +3,69 @@ const fields_container = document.getElementById("fields")
 const templates_container = document.getElementById("templates")
 const input_template = document.getElementById("input_template")
 const input_template_button = document.getElementById("input_template_button")
-const save_buttons_container = document.getElementById("save_buttons_container")
 const overlay = document.getElementById("overlay")
+const editor_page = document.getElementById("editor_page")
+const template_page = document.getElementById("template_page")
+const gallery_page = document.getElementById("gallery_page")
+const gallery_image_name = document.getElementById("gallery_image_name")
+const gallery_query = document.getElementById("gallery_query")
+const gallery_query_form = document.getElementById("gallery_query_form")
+const zoom_actual_size = document.getElementById("zoom_actual_size")
+const zoom_fullscreen = document.getElementById("zoom_fullscreen")
+const google_login_button_link = document.getElementById("google_login_button_link");
 
+// ROOT
+const ROOT = "localhost:3003";
+
+// OAUTH SETUP
+const google_client_id = "172001997851-o792j7uggatipq12mjjpo3n0ts0q9nhs.apps.googleusercontent.com";
+const google_redirect_uri = "https://tolocalhost.com/oauth";// ROOT + "/oauth";
+const google_scope = "openid email";
+const google_random_state = "Google" + Math.floor(Math.random() * 1e15).toString(); 
+google_login_button_link.setAttribute("href", `https://accounts.google.com/o/oauth2/v2/auth?client_id=${google_client_id}&redirect_uri=${google_redirect_uri}&scope=${google_scope}&response_type=code&state=${google_random_state}`)
+
+// IMAGE GALLERY SETUP
+gallery_query_form.addEventListener("submit", gallery_search);
+let gallery_image = {element_id: "", resize_type: ""};
+
+// FIELDS
 let field_groups = [];
 
 function list_stored_templates() {
     templates_container.innerHTML = "";
     let list = Object.keys(localStorage);
     list.forEach(template_name => {
+        const template_name_no_ext = template_name.split(".")[0] || template_name;
+
         let template_button_container = document.createElement("div");
-
-        let remove_template_button = document.createElement("div");
-        remove_template_button.innerHTML = "&#x2715";
-        remove_template_button.style.fontSize = "12px";
-        remove_template_button.style.padding = "5px";
-        remove_template_button.style.textAlign = "center";
-        remove_template_button.style.float = "right";
-        remove_template_button.style.cursor = "pointer";
-        remove_template_button.style.width = "10px";
-
-        remove_template_button.onclick = () => {
-            localStorage.removeItem(template_name);
-            list_stored_templates();
-        };
-        template_button_container.appendChild(remove_template_button);
-
+        template_button_container.classList.add("template_button_container");
+        template_button_container.style.backgroundImage = 'linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)),url("data:image/svg+xml,' + encodeURIComponent(localStorage.getItem(template_name)) + '"';
+        
         let template_button = document.createElement("button");
-        template_button.innerText = template_name;
+        template_button.innerText = template_name_no_ext;
         template_button.classList.add("template_button");
         template_button.onclick = () => {
             const template_svg = localStorage.getItem(template_name);
             viewport.innerHTML = template_svg;
             find_fields(template_svg);
-            save_buttons_container.style.display = "";
-            templates_container.style.display = "none";
-            input_template_button.style.display = "none";
+            editor_page.style.display = "";
+            template_page.style.display = "none";
+            gallery_page.style.display = "none";
+            zoom("actual_size");
         }
         template_button_container.appendChild(template_button);
 
+        let remove_template_button = document.createElement("button");
+        remove_template_button.classList.add("material-symbols-outlined");
+        remove_template_button.classList.add("template_delete_button");
+        remove_template_button.innerText = "delete";
+        remove_template_button.onclick = () => {
+            if(confirm("Should I remove '" + template_name_no_ext + "'?")) {
+                localStorage.removeItem(template_name);
+                list_stored_templates();
+            } 
+        };
+        template_button_container.appendChild(remove_template_button);
 
         templates_container.appendChild(template_button_container);
     })
@@ -59,15 +83,15 @@ function read_template(event){
         // read template
         viewport.innerHTML = reader.result
         find_fields(reader.result)
-        save_buttons_container.style.display = "";
-        templates_container.style.display = "none";
-        input_template_button.style.display = "none";
+        editor_page.style.display = "";
+        template_page.style.display = "none";
+        gallery_page.style.display = "none";
         try {
             localStorage.setItem(input.files[0].name, reader.result);
         } catch (error) {
             alert("The loaded file will not be saved in your local templates because the cache size has reached its limit. Try to avoid inserting big images inside your templates. '" + error + "'")
         }
-        // list_stored_templates();
+        list_stored_templates();
     };
     reader.readAsText(input.files[0]);
 }
@@ -116,7 +140,7 @@ function add_fields(new_field_groups){
             // Every other field is interpreted as (field.name, field.type) = (field_name, data_type).
             if(field.name === "image") {
                 // SPECIAL FIELD: IMAGE
-                // field type: keep-width / keep-height / keep-size
+                // field type: keep-width / keep-height / keep-size / cover
                 fields_container.appendChild( get_image_loader(group.name, field.type) )
             } else if(field.name === "content") {
                 // SPECIAL FIELD: CONTENT
@@ -301,7 +325,7 @@ function edit_multiline_text(element_id, value) {
     const spacing = fontSize * element.style.lineHeight
 
     element.innerHTML = value.split(/\n\r|\n|\r|\r\n/).map((line, i) => {
-        return `<tspan x="${x}" y="${y}" dx="0" dy="${spacing*i}${unit}">${line}</tspan>`
+        return `<tspan x="${x}" y="${y}" dx="0" dy="${spacing*i}${unit}">${parseMarkdown(line)}</tspan>`
     }).join("")
 }
 
@@ -314,7 +338,8 @@ function edit_multiline_text_align_center(element_id, value) {
     const y = parseFloat(element.getAttribute("y"))
     const originalCenterY = parseFloat(element.getAttribute("originalCenterY"))
 
-    const lines = value.split(/\n\r|\n|\r|\r\n/);
+    let lines = value.split(/\n\r|\n|\r|\r\n/);
+    lines = lines.map(l => parseMarkdown(l));
 
     // we write the text without considering center alignment
     element.innerHTML = lines.map((line, i) => {
@@ -338,71 +363,150 @@ function edit_attr(element_id, attr, value){
     element.style[attr] = value
 }
 
+function set_image(image_element_id, image_dataurl, resize_type) {
+    const image = document.getElementById(image_element_id)
+    image.setAttribute("xlink:href", image_dataurl)
+
+    const img = new Image()
+    img.onload = () => {
+        const resize_settings = resize_type.split(/\s+/)
+        const image_width = image.getAttribute("original_width") || image.getAttribute("width")
+        const image_height = image.getAttribute("original_height") || image.getAttribute("height")
+        const image_centerX = parseFloat(image.getAttribute("x")) + parseFloat(image.getAttribute("width"))/2
+        const image_centerY = parseFloat(image.getAttribute("y")) + parseFloat(image.getAttribute("height"))/2
+
+        image.setAttribute("original_width", image_width)
+        image.setAttribute("original_height", image_height)
+
+        // const image_ratio = image_height / image_width
+        const new_ratio = img.height / img.width
+        const ratio = image_height / image_width
+        let new_width = image_width
+        let new_height = image_height
+        if(resize_settings.indexOf("keep-width") !== -1){
+            // resize height accordingly
+            new_height = new_ratio * image_width
+        }else if(resize_settings.indexOf("keep-height") !== -1){
+            // resize width accordingly
+            new_width = image_height / new_ratio
+        }else if(resize_settings.indexOf("cover") !== -1){
+            // use the largest of keep-height and keep-width
+            let keep_width_scale_factor = (new_ratio * image_width) / image_height;
+            let keep_height_scale_factor = (image_height / new_ratio) / image_width;
+            if(keep_height_scale_factor > keep_width_scale_factor) {
+                new_width = image_height / new_ratio
+            }else{
+                new_height = new_ratio * image_width
+            }
+        }else if(resize_settings.indexOf("fit") !== -1){
+            if(new_ratio > ratio) {
+                new_height = image_height;
+                new_width = image_height / new_ratio;
+            }else{
+                new_width = image_width;
+                new_height = image_width * new_ratio;
+            }
+        }else if(resize_settings.indexOf("keep-size") !== -1){
+            // nothing to do
+        }
+
+        if(resize_settings.indexOf("align-center") !== -1){
+            image.setAttribute("x", image_centerX - new_width/2 )
+            image.setAttribute("y", image_centerY - new_height/2 )
+        }
+
+        image.setAttribute("height", new_height)
+        image.setAttribute("width", new_width)
+
+    }
+    img.src = image_dataurl
+}
+
+
+function image_url_to_dataurl(url, callback) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    let base_image = new Image();
+    base_image.onload = function() {
+        canvas.width = base_image.width;
+        canvas.height = base_image.height;
+        ctx.drawImage(base_image, 0, 0);
+        callback(canvas.toDataURL());
+        canvas.remove();
+    }
+    base_image.setAttribute("crossorigin", "anonymous");
+    base_image.src = url;
+}
+
+function set_image_from_url(image_element_id, image_url, resize_type) {
+    image_url_to_dataurl(image_url, dataurl => {
+        set_image(image_element_id, dataurl, resize_type)
+    })
+}
+
 function get_image_loader(element_id, resize_type){
     let input_file = document.createElement("input")
     input_file.type = "file"
     input_file.style.display = "none"
+    input_file.accept = ".jpg,.jpeg,.png,.svg"
     input_file.onchange = event => {
         var file = event.target.files[0];
         var reader  = new FileReader();
         // it's onload event and you forgot (parameters)
         reader.onload = function(e)  {
             // the result image data
-            const dataurl = e.target.result;
-            const image = document.getElementById(element_id)
-            image.setAttribute("xlink:href", dataurl)
-
-            const img = new Image()
-            img.onload = () => {
-                const resize_settings = resize_type.split(/\s+/)
-                const image_width = image.getAttribute("width")
-                const image_height = image.getAttribute("height")
-                const image_centerX = parseFloat(image.getAttribute("x")) + (image_width/2)
-                const image_centerY = parseFloat(image.getAttribute("y")) + (image_height/2)
-
-                // const image_ratio = image_height / image_width
-                const new_ratio = img.height / img.width
-                let new_width = image_width
-                let new_height = image_height
-                if(resize_settings.indexOf("keep-width") !== -1){
-                    // resize height accordingly
-                    new_height = new_ratio * image_width
-                }else if(resize_settings.indexOf("keep-height") !== -1){
-                    // resize width accordingly
-                    new_width = image_height / new_ratio
-                }else if(resize_settings.indexOf("keep-size") !== -1){
-                    // nothing to do
-                }
-
-                if(resize_settings.indexOf("align-center") !== -1){
-                    image.setAttribute("x", image_centerX - new_width/2 )
-                    image.setAttribute("y", image_centerY - new_height/2 )
-                }
-
-                image.setAttribute("height", new_height)
-                image.setAttribute("width", new_width)
-
-            }
-            img.src = dataurl
+            const data_url = e.target.result;
+            set_image(element_id, data_url, resize_type);
         }
         // you have to declare the file loading
         reader.readAsDataURL(file);
     }
 
     let input_file_button = document.createElement("button")
+    input_file_button.classList.add("input_file_button")
+    input_file_button.style.containerType = "inline-size"
     input_file_button.innerText = "IMAGE"
+    input_file_button.innerHTML = `
+        <span class="material-symbols-outlined" style="position: relative; top: 10px;line-height: 0px;">upload</span>
+        <span class="hide_when_small">IMAGE</span>
+    `
+    input_file_button.title = "Load image from file"
     input_file_button.onclick = () => input_file.click()
-    input_file_button.accept = ".jpg,.jpeg,.png,.svg"
+
+    let input_url_button = document.createElement("button")
+    input_url_button.classList.add("input_url_button")
+    input_url_button.classList.add("material-symbols-outlined")
+    input_url_button.innerText = "link"
+    input_url_button.title = "Load image via link"
+    input_url_button.onclick = () => {
+        let url = prompt("Insert the link to the image you want to load.");
+        set_image_from_url(element_id, url, resize_type);
+    }
+
+    let input_gallery_button = document.createElement("button")
+    input_gallery_button.classList.add("input_gallery_button")
+    input_gallery_button.classList.add("material-symbols-outlined")
+    input_gallery_button.innerText = "search"
+    input_gallery_button.title = "Find image in the gallery"
+    input_gallery_button.onclick = () => { 
+        editor_page.style.display = "none";
+        template_page.style.display = "none";
+        gallery_page.style.display = "";
+        gallery_image = {element_id, resize_type};
+        gallery_image_name.innerText = element_id;
+    }
 
     let input_file_box = document.createElement("div")
+    input_file_box.classList.add("input_image_box")
     input_file_box.appendChild(input_file)
     input_file_box.appendChild(input_file_button)
+    input_file_box.appendChild(input_gallery_button)
+    input_file_box.appendChild(input_url_button)
 
-    return input_file_button
+    return input_file_box
 }
 
 list_stored_templates()
-save_buttons_container.style.display = "none";
 
 function split_first_level(string, char) {
     if(char.length !== 1) {
@@ -438,5 +542,69 @@ function refresh_but(group_name, but_field) {
         const group = f[0]
         const fields_to_update = Object.keys(group.on_refresh).filter(k => k !== but_field);
         fields_to_update.forEach(f => { group.on_refresh[f](); })
+    }
+}
+
+function parseMarkdown(line) {
+    return line
+    .replace(/\*(.*)\*/gim, '<tspan style="font-weight: bold;">$1</tspan>') // bold text
+    .replace(/_(.*)_/gim, '<tspan style="font-style: italic;">$1</tspan>'); // italic text
+}
+
+function gallery_search(e) {
+    e.preventDefault();
+    const query = encodeURIComponent(gallery_query.value);
+    const API_KEY = "bruM5nwNzwOjkmBt5mhEKwoKT1AW8LoFxtAi7SCLvj1cPWYePFLjc8OO";
+    gallery_container.innerHTML = "";
+    fetch('https://api.pexels.com/v1/search?query=' + query, {
+        headers: {
+            'Authorization': API_KEY
+        }
+    }).then(response=>response.json()).then(data=>{ 
+        data.photos.forEach(photo => {
+            gallery_container.innerHTML += `
+                <img onclick="set_image_from_url('${gallery_image.element_id}', '${photo.src.large2x}', '${gallery_image.resize_type}');" alt="${photo.alt}" title="${photo.alt}" src="${photo.src.large}" class="gallery_image"/><br/>
+                <div style="margin-left: 10px; margin-bottom: 30px"><a href="${photo.photographer_url}" target="_blank" style="color:white; font-size: 13px; ">${photo.photographer}</a></div>
+                <div style="margin-right: 20px; margin-top: -50px; text-align: right;"><a href="${photo.url}" target="_blank" style="color:white; font-size: 13px; ">View in context</a></div>
+                <br/>
+            `;
+        })
+    })
+}
+
+function back_to_home() {
+    editor_page.style.display = 'none';
+    gallery_page.style.display = 'none';
+    template_page.style.display = '';
+    viewport.innerHTML = "";
+    fields_container.innerHTML = "";
+    gallery_image = {element_id: "", resize_type: ""};
+    field_groups = [];
+}
+
+function zoom(zoom_type) {
+    let svg = viewport.children.item(0);
+    if(zoom_type == "actual_size"){
+        zoom_actual_size.classList.add("chosen");
+        zoom_fullscreen.classList.remove("chosen");
+        if(svg.getAttribute("actual_width") && svg.getAttribute("actual_height")) {
+            svg.setAttribute("width", svg.getAttribute("actual_width"));
+            svg.setAttribute("height", svg.getAttribute("actual_height"));
+            svg.setAttribute("actual_width", "");
+            svg.setAttribute("actual_height", "");
+            svg.setAttribute("preserveAspectRatio", undefined);
+        }
+        viewport.style.overflow = "auto";
+    }else if(zoom_type == "fullscreen"){
+        zoom_actual_size.classList.remove("chosen");
+        zoom_fullscreen.classList.add("chosen");
+        if(!svg.getAttribute("actual_width") && !svg.getAttribute("actual_height")) {
+            svg.setAttribute("actual_width", svg.getAttribute("width"));
+            svg.setAttribute("actual_height", svg.getAttribute("height"));
+            svg.setAttribute("preserveAspectRatio", "xMinYMin meet");
+            svg.setAttribute("width", "100%");
+            svg.setAttribute("height", "100%");
+        }
+        viewport.style.overflow = "hidden";
     }
 }

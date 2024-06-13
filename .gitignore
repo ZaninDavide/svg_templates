@@ -1,5 +1,5 @@
-/.DS_Store
-/image.jpg
-/template.svg
-/test.svg
-/test2.svg
+.DS_Store
+*.txt
+node_modules
+package-lock.json
+.env

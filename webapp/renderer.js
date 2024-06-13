@@ -43,9 +43,10 @@ function triggerDownload (imgURI) {
 
   var a = document.createElement('a');
   let file_name = prompt("File name:")
-  a.setAttribute('download', file_name + '.png');
-  a.setAttribute('href', imgURI);
-  a.setAttribute('target', '_blank');
-
-  a.dispatchEvent(evt);
+  if(file_name !== null) {
+    a.setAttribute('download', file_name + '.png');
+    a.setAttribute('href', imgURI);
+    a.setAttribute('target', '_blank');
+    a.dispatchEvent(evt);
+  }
 }

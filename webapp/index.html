@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVG Templates</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@40,200,0,0" />
+    <link rel="stylesheet" type="text/css" href="webapp/style.css" media="screen" />
+</head>
+<body>
+    <div id="main">
+        <div id="panel"> 
+            <div id="template_page">
+                <a id="google_login_button_link">
+                    <span class="material-symbols-outlined">login</span>
+                    <span class="hide_when_small">GOOGLE LOGIN</span>
+                </button></a>
+                <input id="input_template" type="file" accept=".svg" onchange="read_template(event)" />
+                <button id="input_template_button" onclick="load_template()" title="Load SVG template from file">
+                    <span class="material-symbols-outlined">upload</span>
+                    <span class="hide_when_small">TEMPLATE</span>
+                </button>
+                <div id="templates"></div>
+            </div>
+
+            <div id="gallery_page" style="display: none;">
+                <button 
+                    class="material-symbols-outlined"
+                    onclick="editor_page.style.display = '';template_page.style.display = 'none';gallery_page.style.display = 'none';"
+                    style="padding-left:0px; padding-right: 0px; width: 50px;"                
+                >
+                    chevron_left
+                </button>
+                <span id="gallery_image_name" style="font-size: 18.72px; font-weight: 700; position: relative; bottom: 8px;">Gallery</span>
+                <form id="gallery_query_form">
+                    <input type="text" id="gallery_query" placeholder="Search..."/>
+                </form>
+                <p style="margin-top: 0px"><a href="https://www.pexels.com/" style="color:white; font-size: 13px;padding-left: 10px;margin-top: 0px;" target="_blank">Photos provided by Pexels.</a></p>
+                <div id="gallery_container"></div>
+            </div> 
+
+            <div id="editor_page" style="display: none;">
+                <div id="save_buttons_container">
+                    <button id="back_to_template_page_button" class="material-symbols-outlined" onclick="back_to_home()" title="Back to home page">chevron_left</button>
+                    <button id="save_button1k" onclick="download_svg(1*1024)" title="Download image in 1k resolution">1K</button>
+                    <button id="save_button2k" onclick="download_svg(2*1024)" title="Download image in 2k resolution">
+                        DOWNLOAD
+                    </button>
+                    <button id="save_button4k" onclick="download_svg(4*1024)" title="Download image in 4k resolution">4K</button>    
+                </div>
+                <div id="fields"></div> 
+                <div id="zoom_buttons_container">
+                    <button id="zoom_actual_size" class="material-symbols-outlined chosen" onclick="zoom('actual_size')">view_real_size</button>
+                    <button id="zoom_fullscreen" class="material-symbols-outlined" onclick="zoom('fullscreen')">fullscreen</button>
+                </div>
+            </div> 
+        </div>
+        <div id="viewport">
+        </div>
+    </div>
+    <div id="overlay" style="display: none"></div>
+    <script src="webapp/renderer.js"></script>
+    <script src="webapp/script.js"></script>
+    <style src="webapp/style.css"/>
+</body>
+</html>
