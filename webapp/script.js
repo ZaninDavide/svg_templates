@@ -22,7 +22,7 @@ const google_client_id = "172001997851-o792j7uggatipq12mjjpo3n0ts0q9nhs.apps.goo
 const google_redirect_uri = "https://tolocalhost.com/oauth";// ROOT + "/oauth";
 const google_scope = "openid email";
 const google_random_state = "Google" + Math.floor(Math.random() * 1e15).toString(); 
-google_login_button_link.setAttribute("href", `https://accounts.google.com/o/oauth2/v2/auth?client_id=${google_client_id}&redirect_uri=${google_redirect_uri}&scope=${google_scope}&response_type=code&state=${google_random_state}`)
+google_login_button_link.setAttribute("href", `https://accounts.google.com/o/oauth2/v2/auth?client_id=${google_client_id}&redirect_uri=${google_redirect_uri}&scope=${google_scope}&response_type=code&state=${google_random_state}`) // &access_type=offline&prompt=consent
 
 // IMAGE GALLERY SETUP
 gallery_query_form.addEventListener("submit", gallery_search);
