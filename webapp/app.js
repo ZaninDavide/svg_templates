@@ -12,17 +12,9 @@ const gallery_query = document.getElementById("gallery_query")
 const gallery_query_form = document.getElementById("gallery_query_form")
 const zoom_actual_size = document.getElementById("zoom_actual_size")
 const zoom_fullscreen = document.getElementById("zoom_fullscreen")
-const google_login_button_link = document.getElementById("google_login_button_link");
 
 // ROOT
 const ROOT = "localhost:3003";
-
-// OAUTH SETUP
-const google_client_id = "172001997851-o792j7uggatipq12mjjpo3n0ts0q9nhs.apps.googleusercontent.com";
-const google_redirect_uri = "https://tolocalhost.com/oauth";// ROOT + "/oauth";
-const google_scope = "openid email";
-const google_random_state = "Google" + Math.floor(Math.random() * 1e15).toString(); 
-google_login_button_link.setAttribute("href", `https://accounts.google.com/o/oauth2/v2/auth?client_id=${google_client_id}&redirect_uri=${google_redirect_uri}&scope=${google_scope}&response_type=code&state=${google_random_state}`) // &access_type=offline&prompt=consent
 
 // IMAGE GALLERY SETUP
 gallery_query_form.addEventListener("submit", gallery_search);
@@ -30,6 +22,26 @@ let gallery_image = {element_id: "", resize_type: ""};
 
 // FIELDS
 let field_groups = [];
+
+// READ USER ID TOKEN
+let id_token = "";
+const url = new URL(window.location.href);
+const path = url.pathname;
+if(path.startsWith("/app/g/")) {
+    id_token = "GoogleIdToken " + path.split("/")[3];
+}
+
+// RETRIVE TEMPLATES
+const server = "http://localhost:3003";
+const response = fetch(server + "/user/templates", {
+    method: "GET",
+    headers: { "Authorization": id_token },
+}).then(async (res) => {
+    const templates = await res.json();
+    console.log(templates)
+}).catch(err => {
+    console.error("Error fetching templates: " + err.message);
+});
 
 function list_stored_templates() {
     templates_container.innerHTML = "";
@@ -39,10 +51,11 @@ function list_stored_templates() {
 
         let template_button_container = document.createElement("div");
         template_button_container.classList.add("template_button_container");
-        template_button_container.style.backgroundImage = 'linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)),url("data:image/svg+xml,' + encodeURIComponent(localStorage.getItem(template_name)) + '"';
+        // template_button_container.style.backgroundImage = 'linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)),url("data:image/svg+xml,' + encodeURIComponent(localStorage.getItem(template_name)) + '"';
         
         let template_button = document.createElement("button");
         template_button.innerText = template_name_no_ext;
+        template_button.title = template_name_no_ext;
         template_button.classList.add("template_button");
         template_button.onclick = () => {
             const template_svg = localStorage.getItem(template_name);
@@ -132,7 +145,7 @@ function find_fields(svg){
 function add_fields(new_field_groups){
     fields_container.innerHTML = ""
     new_field_groups.forEach((group, group_id) => {
-        let group_label = document.createElement("h3");
+        let group_label = document.createElement("h2");
         group_label.innerText = group.name
         fields_container.appendChild(group_label)
         group.fields.forEach(field => {
@@ -142,7 +155,11 @@ function add_fields(new_field_groups){
                 // SPECIAL FIELD: IMAGE
                 // field type: keep-width / keep-height / keep-size / cover
                 fields_container.appendChild( get_image_loader(group.name, field.type) )
-            } else if(field.name === "content") {
+            } else if(
+                field.name === "content" 
+                && !(field.type.startsWith("[") && field.type.endsWith("]"))
+                && !(field.type.startsWith("{") && field.type.endsWith("}"))
+            ) {
                 // SPECIAL FIELD: CONTENT
                 let types = field.type.split(" ");
                 if(types.indexOf("text-multiline") !== -1){
@@ -360,7 +377,11 @@ function edit_multiline_text_align_center(element_id, value) {
 // edit_attr: set attribute of a given DOM element
 function edit_attr(element_id, attr, value){
     const element = document.getElementById(element_id)
-    element.style[attr] = value
+    if(attr === "content") {
+        element.innerHTML = value;
+    } else {
+        element.style[attr] = value
+    }
 }
 
 function set_image(image_element_id, image_dataurl, resize_type) {
@@ -467,7 +488,7 @@ function get_image_loader(element_id, resize_type){
     input_file_button.style.containerType = "inline-size"
     input_file_button.innerText = "IMAGE"
     input_file_button.innerHTML = `
-        <span class="material-symbols-outlined" style="position: relative; top: 10px;line-height: 0px;">upload</span>
+        <span class="material-symbols-outlined" style="position: relative; top: 7px;line-height: 0px;">upload</span>
         <span class="hide_when_small">IMAGE</span>
     `
     input_file_button.title = "Load image from file"
@@ -494,6 +515,7 @@ function get_image_loader(element_id, resize_type){
         gallery_page.style.display = "";
         gallery_image = {element_id, resize_type};
         gallery_image_name.innerText = element_id;
+        gallery_query.focus();
     }
 
     let input_file_box = document.createElement("div")

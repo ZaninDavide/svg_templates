@@ -1,0 +1,45 @@
+@font-face {
+	font-family: system-ui;
+	font-style: normal;
+	font-weight: 300;
+	src: local(".SFNS-Light"), local(".SFNSText-Light"), local(".HelveticaNeueDeskInterface-Light"), local(".LucidaGrandeUI"), local("Segoe UI Light"), local("Ubuntu Light"), local("Roboto-Light"), local("DroidSans"), local("Tahoma");
+}
+
+body{
+    font-family: system-ui;
+    padding: 0px;
+    margin: 0px;
+    font-size: 13.33333px;
+}
+
+.material-symbols-outlined {
+    font-size: 25px;
+    line-height: 17.7833px;
+}
+
+html {
+    --dark: rgb(27, 27, 27);
+    --light: rgb(250, 250, 250);
+    --border: 1px solid rgb(215, 215, 215);
+    --cardShadow: 5px 5px 10px rgba(230, 230, 230, 0.3); 
+    --hoverColor: rgb(236, 236, 236);
+}
+
+@container (width < 110px) {
+    .hide_when_small {
+        display: none;
+    }
+}
+
+hr {
+    border-top: var(--border);
+    border-bottom: none;
+    border-left: none;
+    border-right: none;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+h1, h2, h3 {
+    color: var(--dark);
+}
