@@ -14,7 +14,8 @@ const zoom_actual_size = document.getElementById("zoom_actual_size")
 const zoom_fullscreen = document.getElementById("zoom_fullscreen")
 
 // ROOT
-const ROOT = "localhost:3003";
+const ROOT = "http://localhost:3003";
+const SERVER = "http://localhost:3003";
 
 // IMAGE GALLERY SETUP
 gallery_query_form.addEventListener("submit", gallery_search);
@@ -29,42 +30,52 @@ const url = new URL(window.location.href);
 const path = url.pathname;
 if(path.startsWith("/app/g/")) {
     id_token = "GoogleIdToken " + path.split("/")[3];
+}else{
+    window.location.replace(ROOT); // Login Page
 }
 
-// RETRIVE TEMPLATES
-const server = "http://localhost:3003";
-const response = fetch(server + "/user/templates", {
-    method: "GET",
-    headers: { "Authorization": id_token },
-}).then(async (res) => {
-    const templates = await res.json();
-    console.log(templates)
-}).catch(err => {
-    console.error("Error fetching templates: " + err.message);
-});
+// RETRIVE LIST OF USER TEMPLATES
+let templates = []; // [ {svgid, title}, {svgid, title}, ... ]
+
+function retrive_templates_list(callback) {
+    fetch(SERVER + "/user/templates", {
+        method: "GET",
+        headers: { "Authorization": id_token },
+    }).then(async (res) => {
+        const json = await res.json();
+        if(json) {
+            templates = json.map(row => row.templates)
+            if(callback) callback(templates)
+        }
+    }).catch(err => {
+        console.error("Error fetching templates: " + err.message);
+    });
+}
+retrive_templates_list(list_stored_templates)
 
 function list_stored_templates() {
     templates_container.innerHTML = "";
-    let list = Object.keys(localStorage);
-    list.forEach(template_name => {
-        const template_name_no_ext = template_name.split(".")[0] || template_name;
-
+    templates.forEach(template => {
         let template_button_container = document.createElement("div");
         template_button_container.classList.add("template_button_container");
         // template_button_container.style.backgroundImage = 'linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)),url("data:image/svg+xml,' + encodeURIComponent(localStorage.getItem(template_name)) + '"';
         
         let template_button = document.createElement("button");
-        template_button.innerText = template_name_no_ext;
-        template_button.title = template_name_no_ext;
+        template_button.innerText = template.title;
+        template_button.title = template.title;
         template_button.classList.add("template_button");
         template_button.onclick = () => {
-            const template_svg = localStorage.getItem(template_name);
-            viewport.innerHTML = template_svg;
-            find_fields(template_svg);
-            editor_page.style.display = "";
+            editor_page.style.display = "none";
             template_page.style.display = "none";
             gallery_page.style.display = "none";
-            zoom("actual_size");
+            download_template(template.svgid).then(svg => {
+                viewport.innerHTML = svg;
+                find_fields(svg);
+                editor_page.style.display = "";
+                zoom("actual_size");
+            }).catch(err => {
+                console.error(err);
+            })
         }
         template_button_container.appendChild(template_button);
 
@@ -73,9 +84,8 @@ function list_stored_templates() {
         remove_template_button.classList.add("template_delete_button");
         remove_template_button.innerText = "delete";
         remove_template_button.onclick = () => {
-            if(confirm("Should I remove '" + template_name_no_ext + "'?")) {
-                localStorage.removeItem(template_name);
-                list_stored_templates();
+            if(confirm("Should I remove '" + template.title + "'?")) {
+                delete_template(template.svgid, () => retrive_templates_list(list_stored_templates))
             } 
         };
         template_button_container.appendChild(remove_template_button);
@@ -84,27 +94,82 @@ function list_stored_templates() {
     })
 }
 
-
 function load_template(){
     input_template.click()
+}
+
+function upload_template(title, svg) {
+    svg = encodeURIComponent(svg);
+    const textEncoder = new TextEncoder();
+    if(textEncoder.encode(svg).length > 2*1024*1024) {
+        console.warn("Template to large to upload: " + err.message);
+        return;
+    }
+    fetch(SERVER + "/user/upload_template/", {
+        method: "POST",
+        headers: { 
+            "Authorization": id_token, 
+            "Content-Type": "application/json" 
+        },
+        body: JSON.stringify({ title, svg })
+    }).catch(err => {
+        console.error("Error uploading template: " + err.message);
+    }).then(_ => {
+        retrive_templates_list()
+    });
+}
+
+function download_template(svgid) {
+    return new Promise((resolve, reject) => {
+        fetch(SERVER + "/user/get_template/", {
+            method: "POST",
+            headers: { 
+                "Authorization": id_token, 
+                "Content-Type": "application/json" 
+            },
+            body: JSON.stringify({ svgid })
+        }).then(async (res) => {
+            let encoded_svg = await res.text();
+            let unescaped_svg = decodeURIComponent(encoded_svg);
+            resolve(unescaped_svg)
+        }).catch(err => {
+            reject("Error downloading template: " + err.message);
+        });
+    })
+}
+
+function delete_template(svgid, callback) {
+    fetch(SERVER + "/user/delete_template/", {
+        method: "POST",
+        headers: { 
+            "Authorization": id_token, 
+            "Content-Type": "application/json" 
+        },
+        body: JSON.stringify({ svgid })
+    }).then(async (res) => {
+        callback()
+    }).catch(err => {
+        console.error("Error deleting template: " + err.message + ".");
+    });
 }
 
 function read_template(event){
     var input = event.target;
     var reader = new FileReader();
     reader.onload = function(){
-        // read template
-        viewport.innerHTML = reader.result
-        find_fields(reader.result)
+        const svg = reader.result;
+
+        // read and open template 
+        viewport.innerHTML = svg
         editor_page.style.display = "";
         template_page.style.display = "none";
         gallery_page.style.display = "none";
-        try {
-            localStorage.setItem(input.files[0].name, reader.result);
-        } catch (error) {
-            alert("The loaded file will not be saved in your local templates because the cache size has reached its limit. Try to avoid inserting big images inside your templates. '" + error + "'")
-        }
-        list_stored_templates();
+
+        // store template
+        let name = input.files[0].name;
+        name = name.split(".")[0] || name;
+        upload_template(name, svg);
+        find_fields(svg);
     };
     reader.readAsText(input.files[0]);
 }
@@ -586,8 +651,8 @@ function gallery_search(e) {
         data.photos.forEach(photo => {
             gallery_container.innerHTML += `
                 <img onclick="set_image_from_url('${gallery_image.element_id}', '${photo.src.large2x}', '${gallery_image.resize_type}');" alt="${photo.alt}" title="${photo.alt}" src="${photo.src.large}" class="gallery_image"/><br/>
-                <div style="margin-left: 10px; margin-bottom: 30px"><a href="${photo.photographer_url}" target="_blank" style="color:white; font-size: 13px; ">${photo.photographer}</a></div>
-                <div style="margin-right: 20px; margin-top: -50px; text-align: right;"><a href="${photo.url}" target="_blank" style="color:white; font-size: 13px; ">View in context</a></div>
+                <div style="margin-left: 10px; margin-bottom: 30px"><a href="${photo.photographer_url}" target="_blank" style="color: black">${photo.photographer}</a></div>
+                <div style="margin-right: 20px; margin-top: -50px; text-align: right;"><a href="${photo.url}" target="_blank" style="color: black">View in context</a></div>
                 <br/>
             `;
         })
@@ -602,6 +667,7 @@ function back_to_home() {
     fields_container.innerHTML = "";
     gallery_image = {element_id: "", resize_type: ""};
     field_groups = [];
+    list_stored_templates()
 }
 
 function zoom(zoom_type) {

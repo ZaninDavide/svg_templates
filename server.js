@@ -27,6 +27,8 @@ async function main() {
     await client.connect()
 
     const app = express()
+    app.use(express.json({limit: "2mb"}));
+    app.use(express.urlencoded({ limit: "2mb", extended: true }));
 
     // SERVE WEBAPP FILES
     app.use("/webapp", express.static('webapp'))
@@ -94,6 +96,7 @@ async function main() {
             client.query("SELECT * FROM Users WHERE google_uuid = $1", [google_uuid], async (err, dbres) => {
                 if(err) {
                     console.log("Error: " + JSON.stringify(err));
+                    res.status(500).redirect("/");
                 } else {
                     if(dbres.rowCount === 0) {
                         // THIS IS A NEW USER
@@ -116,11 +119,97 @@ async function main() {
         }
     })
 
-    // GET USER TEMPLATES
+    // GET USER TEMPLATES LIST
     app.get("/user/templates", checkAuthorization, getUserId, (req, res) => {
-        const templates = getTemplatesList(req.id);
-        res.send(templates);
+        getTemplatesList(req.id).then(result => {
+            res.json(result);
+        }).catch(err => {
+            res.status(400).send(err.toString())
+        })
     })
+
+    // UPLOAD TEMPLATE
+    app.post("/user/upload_template", checkAuthorization, getUserId, async (req, res) => {
+        if(!req.body || !req.body.title || !req.body.svg) { res.status(400).send("The title, the svg code or both are missing from the body.") }
+        const title = req.body.title.toString()
+        const svg = req.body.svg.toString()
+        const textEncoder = new TextEncoder();
+        const size = textEncoder.encode(svg).length;
+        if(size > 2*1024*1024) { res.status(507).send("File is too large (max 2MB).") }
+
+        try {
+            await client.query('BEGIN');
+            const result = await client.query(
+                "INSERT INTO Templates (title, svg) VALUES ($1, $2) RETURNING id",
+                [title, svg]
+            );
+            const svgid = result?.rows[0]?.id;
+            if(svgid === null && svgid === undefined && svgid === NaN) throw "Invalid template ID.";
+            await client.query(
+                "INSERT INTO TemplateOwnerPairs (svgid, userid) VALUES ($1, $2)",
+                [svgid, req.id]
+            );
+            await client.query('COMMIT');
+            res.status(201).send("Ok")
+        } catch (e) {
+            client.query('ROLLBACK');
+            res.status(500).send("Error uploading template to database: " + e.toString() + ".")
+        }
+    })
+
+    // GET TEMPLATE
+    app.post("/user/get_template", checkAuthorization, getUserId, async (req, res) => {
+        if(!req.body || !req.body.svgid ) { res.status(400).send("The svg ID is missing from the body.") }
+        const svgid = req.body.svgid.toString()
+        try {
+            const result = await client.query(`
+                SELECT encode(Templates.svg, 'escape')
+                FROM 
+                    TemplateOwnerPairs INNER JOIN Templates 
+                    ON TemplateOwnerPairs.svgid=Templates.id 
+                WHERE TemplateOwnerPairs.userid = $1 AND Templates.id = $2
+            `, [req.id, svgid]);
+            const rows = result?.rows;
+            if(rows[0]?.encode) {
+                res.send(rows[0].encode)
+            }else{
+                res.status(400).send("Template not found.")
+            }
+        } catch (e) {
+            res.status(500).send("Error downloading template from database: " + e.toString() + ".")
+        }
+    })
+
+    // DELETE TEMPLATE
+    app.post("/user/delete_template", checkAuthorization, getUserId, async (req, res) => {
+        if(!req.body || !req.body.svgid ) { res.status(400).send("The svg ID is missing from the body.") }
+        const svgid = req.body.svgid.toString()
+        try {
+            await client.query('BEGIN');
+            await client.query(
+                `DELETE FROM Templates WHERE id = $2 AND id IN (
+                    SELECT svgid 
+                    FROM TemplateOwnerPairs 
+                    WHERE userid = $1
+                );`,
+                [req.id, svgid]
+            );
+            await client.query(
+                `DELETE FROM TemplateOwnerPairs WHERE userid = $1 AND svgid = $2`,
+                [req.id, svgid]
+            );
+            await client.query('COMMIT');
+            res.send("Ok")
+        } catch (e) {
+            res.status(500).send("Error deleting template from database: " + e.toString() + ".")
+        }
+    })
+
+    // ERROR 404
+    app.all('*', (req, res) => {
+        // Todo link back to homepage
+        res.status(404).send('<h1>404! Page not found</h1>');
+    });
       
     // RUN SERVER
     app.listen(PORT, () => {
@@ -133,7 +222,7 @@ async function main() {
 function getUserId(req, res, next) {
     client.query("SELECT (id) FROM Users WHERE google_uuid = $1", [req.jwt.sub], async (err, dbres) => {
         if(err) {
-            res.status(400).send("Failed to read from database with error '" + JSON.stringify(err) + "'")
+            res.status(500).send("Failed to read from database with error '" + JSON.stringify(err) + "'")
         } else {
             if (dbres.rowCount === 1) {
                 req.id = dbres.rows[0].id
@@ -141,22 +230,25 @@ function getUserId(req, res, next) {
             } else if (dbres.rowCount === 0) {
                 res.status(400).send("User not found.")
             } else {
-                res.status(400).send("Unreachable code reached.")
+                res.status(500).send("Unreachable code reached.")
             }
         }
     })
 }
 
-async function getTemplatesList(id) {
-    return new Promise((resolve, reject) => {
+async function getTemplatesList(userid) {
+    return new Promise(async (resolve, reject) => {
         client.query(`
-            SELECT (TemplateOwnerPairs.svgid, Templates.title) 
-            FROM TemplateOwnerPairs 
-            INNER JOIN Templates ON TemplateOwnerPairs.svgid=Templates.id 
-            WHERE TemplateOwnerPairs.userid = $1
-        `, [id], async (err, dbres) => {
+            SELECT row_to_json(row) Templates
+            FROM (
+                SELECT TemplateOwnerPairs.svgid, Templates.title
+                FROM TemplateOwnerPairs 
+                INNER JOIN Templates ON TemplateOwnerPairs.svgid = Templates.id 
+                WHERE TemplateOwnerPairs.userid = $1
+            ) row
+        `, [userid], async (err, dbres) => {
             if(err) {
-                reject("Failed to read from database with error '" + JSON.stringify(err) + "'")
+                reject("Failed to read from database with error: " + JSON.stringify(err) + ".")
                 return;
             }
             resolve(dbres.rows)
@@ -178,11 +270,11 @@ async function checkAuthorization(req, res, next) {
 
     try {
         const decoded = await verify_google_user_with_id_token(id_token)
-        if(decoded.error) { res.status(400).send("Invalid token: " + decoded.error) }
+        if(decoded.error) { res.status(401).send("Invalid token: " + decoded.error) }
         req.jwt = decoded
         next()
     } catch (e) {
-        res.status(400).send("Error decoding token.")
+        res.status(401).send("Error decoding token.")
         return
     }
 }
