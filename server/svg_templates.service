@@ -1,0 +1,15 @@
+[Unit]
+Description=svg_templates Server
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+User=root
+ExecStart=/snap/bin/node server.js
+WorkingDirectory=/home/andrea/apis/svg_templates/server
+
+[Install]
+WantedBy=multi-user.target
