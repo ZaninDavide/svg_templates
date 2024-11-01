@@ -4,6 +4,7 @@ const path = require("path"); // Import the path module
 const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
 const pg = require('pg')
+const https = require('https')
 
 dotenv.config()
 const PORT = process.env.PORT || 3003
@@ -212,9 +213,19 @@ async function main() {
     });
       
     // RUN SERVER
-    app.listen(PORT, () => {
-        console.log(`✅ Server listening on port ${PORT}`)
-    })
+    if(!process.env.TLS_DIR){ 
+        // Development
+        app.listen(PORT, () =>
+            console.log(`✅ Server listening on port ${PORT}`)
+        )
+    }else{
+        // Production
+        var privateKey  = fs.readFileSync(process.env.TLS_DIR+'/privkey.pem', 'utf8');
+        var certificate = fs.readFileSync(process.env.TLS_DIR+'/cert.pem', 'utf8');
+        let credentials = {key: privateKey, cert: certificate};
+        let httpsServer = https.createServer(credentials, app);
+        httpsServer.listen(PORT)
+    }
 }
 
 // READ USER FROM DATABASE

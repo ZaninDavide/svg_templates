@@ -14,8 +14,8 @@ const zoom_actual_size = document.getElementById("zoom_actual_size")
 const zoom_fullscreen = document.getElementById("zoom_fullscreen")
 
 // ROOT
-const ROOT = "http://localhost:3003";
-const SERVER = "http://localhost:3003";
+const ROOT = "https://template.baida.dev";
+const SERVER = "https://template.baida.dev:3009";
 
 // IMAGE GALLERY SETUP
 gallery_query_form.addEventListener("submit", gallery_search);

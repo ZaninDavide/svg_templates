@@ -1,5 +1,4 @@
 .DS_Store
 *.txt
 node_modules
-package-lock.json
 .env
