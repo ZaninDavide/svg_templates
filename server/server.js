@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
 const pg = require('pg')
 const https = require('https')
+const fs = require('fs')
 
 dotenv.config()
 const PORT = process.env.PORT || 3003
@@ -22,6 +23,7 @@ const client = new Client({
     sslmode: 'require',
 })
 
+const ROOT = "https://template.baida.dev"
 const google_resource_server_url = "https://www.googleapis.com/oauth2/v4/token";
 
 async function main() {
@@ -30,19 +32,6 @@ async function main() {
     const app = express()
     app.use(express.json({limit: "2mb"}));
     app.use(express.urlencoded({ limit: "2mb", extended: true }));
-
-    // SERVE WEBAPP FILES
-    app.use("/webapp", express.static('webapp'))
-
-    // SERVE HOME/LOGIN PAGE
-    app.get("/", (req, res) => {
-        res.sendFile(path.join(__dirname, 'webapp', 'login.html'));
-    })
-
-    // SERVE APP
-    app.get("/app/g/:google_id_token", (req, res) => {
-        res.sendFile(path.join(__dirname, 'webapp', 'app.html'));
-    })
 
     // RESPOND TO THE OAUTH REDIRECT
     app.get("/oauth", async function(req, res) {
@@ -111,7 +100,7 @@ async function main() {
                             [ google_uuid, userinfo.email, userinfo.given_name, userinfo.family_name, userinfo.picture ]
                         )
                     }
-                    res.redirect("/app/g/" + data.id_token.toString());
+                    res.redirect(ROOT + "/app.html?google_id_token=" + data.id_token.toString());
                 }
             })
         }else{

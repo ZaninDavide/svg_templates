@@ -8,9 +8,13 @@ ssh -t andrea@raspberrypi.baida.dev \
             sudo systemctl enable /home/andrea/apis/svg_templates/server/svg_templates.service && echo "Registering server for the first time"; \
         fi
 
+        export PATH=$PATH:/snap/bin
+
         # Retrive changes from git
         cd ~/apis/svg_templates;
         git pull;
+        cd server;
+        /snap/bin/npm install;
 
         # Run the server
         sudo systemctl start svg_templates.service;

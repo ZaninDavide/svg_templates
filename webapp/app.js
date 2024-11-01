@@ -27,9 +27,10 @@ let field_groups = [];
 // READ USER ID TOKEN
 let id_token = "";
 const url = new URL(window.location.href);
-const path = url.pathname;
-if(path.startsWith("/app/g/")) {
-    id_token = "GoogleIdToken " + path.split("/")[3];
+const params = new URLSearchParams(url.search);
+const google_id_token = params.get('google_id_token');
+if(google_id_token) {
+    id_token = "GoogleIdToken " + google_id_token;
 }else{
     window.location.replace(ROOT); // Login Page
 }
