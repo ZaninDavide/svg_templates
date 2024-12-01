@@ -6,9 +6,16 @@ const jwksClient = require('jwks-rsa');
 const pg = require('pg')
 const https = require('https')
 const fs = require('fs')
+const cors = require('cors');
 
 dotenv.config()
-const PORT = process.env.PORT || 3003
+
+const LOCAL = !process.env.PORT
+const PORT = LOCAL ? 3003 : process.env.PORT
+const HOME = LOCAL ? "http://localhost:3000" : "https://template.baida.dev"
+const SERVER = LOCAL ? "http://localhost:3003" : "https://template.baida.dev:3009";
+
+const google_resource_server_url = "https://www.googleapis.com/oauth2/v4/token";
 
 const { Client } = pg
 const client = new Client({
@@ -23,13 +30,11 @@ const client = new Client({
     sslmode: 'require',
 })
 
-const ROOT = "https://template.baida.dev"
-const google_resource_server_url = "https://www.googleapis.com/oauth2/v4/token";
-
 async function main() {
     await client.connect()
 
     const app = express()
+    app.use(cors());
     app.use(express.json({limit: "2mb"}));
     app.use(express.urlencoded({ limit: "2mb", extended: true }));
 
@@ -80,7 +85,6 @@ async function main() {
                 return;
             }
             const userinfo = await userinfo_response.json();
-            // console.log(JSON.stringify(userinfo));
 
             const google_uuid = userinfo.sub;
             client.query("SELECT * FROM Users WHERE google_uuid = $1", [google_uuid], async (err, dbres) => {
@@ -100,7 +104,7 @@ async function main() {
                             [ google_uuid, userinfo.email, userinfo.given_name, userinfo.family_name, userinfo.picture ]
                         )
                     }
-                    res.redirect(ROOT + "/app.html?google_id_token=" + data.id_token.toString());
+                    res.redirect(HOME + "/app?google_id_token=" + data.id_token.toString());
                 }
             })
         }else{
@@ -194,6 +198,12 @@ async function main() {
             res.status(500).send("Error deleting template from database: " + e.toString() + ".")
         }
     })
+
+    // ERROR
+    app.all('/error', (req, res) => {
+        // Todo link back to homepage
+        res.status(404).send(`<h1>Error</h1><p>${req.query.error || "Unknown error"}</p>`);
+    });
 
     // ERROR 404
     app.all('*', (req, res) => {
@@ -323,7 +333,7 @@ function error_redirect(res, error) {
     const params = new URLSearchParams();
     params.append("error", string);
     console.log("❌ " + string);
-    res.redirect("/?" + params);
+    res.redirect(SERVER + "/error/?error" + params);
 }
 
 main()

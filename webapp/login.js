@@ -1,9 +1,13 @@
 const google_login_button_link = document.getElementById("google_login_button_link");
 const google_login_icon = document.getElementById("google_login_icon");
 
+const LOCAL = window.location.toString().startsWith("http://localhost:3000/")
+const HOME = LOCAL ? "http://localhost:3000" : "https://template.baida.dev"
+const SERVER = LOCAL ? "http://localhost:3003" : "https://template.baida.dev:3009";
+
 // OAUTH SETUP
 const google_client_id = "172001997851-o792j7uggatipq12mjjpo3n0ts0q9nhs.apps.googleusercontent.com";
-const google_redirect_uri = "https://template.baida.dev:3009/oauth"; // "localhost:3003/oauth";
+const google_redirect_uri = LOCAL ? "https://tolocalhost.com/oauth" : `${SERVER}/oauth`;
 const google_scope = "openid profile email";
 const google_random_state = "Google" + Math.floor(Math.random() * 1e15).toString(); 
 google_login_button_link.setAttribute("href", `https://accounts.google.com/o/oauth2/v2/auth?client_id=${google_client_id}&redirect_uri=${google_redirect_uri}&scope=${google_scope}&response_type=code&state=${google_random_state}`) // &access_type=offline&prompt=consent

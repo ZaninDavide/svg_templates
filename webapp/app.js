@@ -13,9 +13,9 @@ const gallery_query_form = document.getElementById("gallery_query_form")
 const zoom_actual_size = document.getElementById("zoom_actual_size")
 const zoom_fullscreen = document.getElementById("zoom_fullscreen")
 
-// ROOT
-const ROOT = "https://template.baida.dev";
-const SERVER = "https://template.baida.dev:3009";
+const LOCAL = window.location.toString().startsWith("http://localhost:3000/")
+const HOME = LOCAL ? "http://localhost:3000" : "https://template.baida.dev";
+const SERVER = LOCAL ? "http://localhost:3003" : "https://template.baida.dev:3009";
 
 // IMAGE GALLERY SETUP
 gallery_query_form.addEventListener("submit", gallery_search);
@@ -32,7 +32,7 @@ const google_id_token = params.get('google_id_token');
 if(google_id_token) {
     id_token = "GoogleIdToken " + google_id_token;
 }else{
-    window.location.replace(ROOT); // Login Page
+    window.location.replace(HOME); // Login Page
 }
 
 // RETRIVE LIST OF USER TEMPLATES
