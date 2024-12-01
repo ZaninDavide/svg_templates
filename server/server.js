@@ -1,6 +1,5 @@
 const dotenv = require("dotenv")
 const express = require("express")
-const path = require("path"); // Import the path module
 const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
 const pg = require('pg')
@@ -104,7 +103,11 @@ async function main() {
                             [ google_uuid, userinfo.email, userinfo.given_name, userinfo.family_name, userinfo.picture ]
                         )
                     }
-                    res.redirect(HOME + "/app?google_id_token=" + data.id_token.toString());
+                    if(LOCAL){
+                        res.redirect(HOME + "/app?google_id_token=" + data.id_token.toString());
+                    }else{
+                        res.redirect(HOME + "/app.html?google_id_token=" + data.id_token.toString());
+                    }
                 }
             })
         }else{
@@ -333,7 +336,7 @@ function error_redirect(res, error) {
     const params = new URLSearchParams();
     params.append("error", string);
     console.log("❌ " + string);
-    res.redirect(SERVER + "/error/?error" + params);
+    res.redirect(SERVER + "/error/?" + params);
 }
 
 main()
